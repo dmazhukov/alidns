@@ -4,8 +4,11 @@ from setuptools import setup
 
 setup(
     name = 'alidns',
-    version = '2018.3.17',
-    keywords = ('aliyun', 'dns'),
+    version = '1.0.0',
+    keywords = (
+        'aliyun',
+        'dns'
+    ),
     author = 'luoyeah',
     author_email = '1403287193@qq.com',
     url = 'https://github.com/luoyeah/alidns',
