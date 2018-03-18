@@ -1,21 +1,19 @@
-## github-console
-#### Manage github with console method.
-
-
-#### Pypi [github-console](https://pypi.python.org/pypi/github-console)
+## alidns
+#### Aliyun-DNS update tool.
+#### Pypi [alidns](https://pypi.python.org/pypi/alidns)
 ### How to install ?
 ```bash
  cd ~
- git clone https://github.com/luoyeah/github-console
- cd github-console
+ git clone https://github.com/luoyeah/alidns
+ cd alidns
  ./setup.py install
  
- github -h
+ alidns -h
 ```
 ### or
 
 ```bash
- pip install github-console
+ pip install alidns
  
- github -h
+ alidns -h
 ```
