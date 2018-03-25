@@ -1,4 +1,26 @@
-#!/usr/bin/python3
+'''Aliyun DNS Record Update Tools.
+
+Usage:
+ alidns config  <key> <key-secret> <domain>
+ alidns clean
+ alidns list
+ alidns add     [-r=<record>] [-v=<ip>] [-t=<type>] [--ttl=<ttl>]
+ alidns remove  <record>
+
+Commands:
+ config         Config Key key-secret and domain.
+ clean          Clean config.
+ 
+Arguments:
+ -r=<record>    Host record.
+ -v=<ip>        Host ip.
+ -t=<type>      Record type.
+ --ttl=<ttl>    Record ttl.
+
+Examples:
+ alidns config 12341234 12341234 forks.club
+ alidns add -r @ -v 127.0.0.1 -t A --ttl 600
+'''
 
 from aliyunsdkcore import client
 from aliyunsdkalidns.request.v20150109.AddDomainRecordRequest       import AddDomainRecordRequest
@@ -6,133 +28,174 @@ from aliyunsdkalidns.request.v20150109.DeleteDomainRecordRequest    import Delet
 from aliyunsdkalidns.request.v20150109.DescribeDomainRecordsRequest import DescribeDomainRecordsRequest
 from aliyunsdkalidns.request.v20150109.UpdateDomainRecordRequest    import UpdateDomainRecordRequest
 
-from argparse import ArgumentParser
+from docopt import docopt
 import json
 import socket
+import os
 
-class R:
-    verbose = False
-
-#parser_arguments:
+class Alidns(object):
+    def __init__(self, key, key_secret, domain):
+        '''init'''
+        self.__domain = domain
+        self.__bs = client.AcsClient(key, key_secret,'cn-hangzhou')
+        self.__print = ''
+        self.__records = self.query()
+                                      
+    def query(self):
+        '''Query all host records.'''
+        req = DescribeDomainRecordsRequest()
+        req.set_accept_format('json')
+        req.set_DomainName(self.__domain)
+        js = json.loads(self.__bs.do_action_with_exception(req).decode())
+        ret = {}
+        strs = ''
+        for x in js['DomainRecords']['Record']:
+            RR = x['RR']
+            Type = x['Type']
+            Value = x['Value']
+            RecordId = x['RecordId']
+            TTL = x['TTL']
+            strs = strs + '[*]%8s.%s -> %-16s;  %-8s;%d\n' % (RR, self.__domain, Value, Type, TTL)
+            ret[RR] = [Value, Type, TTL, RecordId]
+        self.__print = strs
+        return ret
+        
+    def list(self, update=True):
+        '''Print query results.'''
+        if update:
+            self.query()
+        print(self.__print)
+        
+    def __is_exist(self, r):
+        '''Record exist?'''
+        for i in self.__records:
+            if r == i:
+                return True
+        return False
+        
+    def __get_ip(self):
+        '''Get default interface ip address(v4)'''
+        s = socket.socket()
+        s.connect(('baidu.com',80))
+        r = s.getsockname()[0]
+        s.close()
+        return r
+        
+    def __update_record(self, record_id, record, value, record_type, ttl):
+        '''Update record.'''
+        req = UpdateDomainRecordRequest()
+        req.set_RecordId(record_id)
+        req.set_accept_format('json')
+        req.set_RR(record)
+        req.set_Type(record_type)
+        req.set_TTL(ttl)
+        req.set_Value(value)
+        js = json.loads(self.__bs.do_action_with_exception(req).decode())
+        print('[+]%s.%s -> %s;%s;%d' % (record, self.__domain, value, record_type, ttl))
+        
+    def __add_record(self, record, value, record_type, ttl):
+        '''Add record.'''
+        req = AddDomainRecordRequest()
+        req.set_DomainName(self.__domain)
+        req.set_accept_format('json')
+        req.set_RR(record)
+        req.set_Type(record_type)
+        req.set_TTL(ttl)
+        req.set_Value(value)
+        js = json.loads(self.__bs.do_action_with_exception(req).decode())
+        print('[+]%8s.%s -> %-16s;  %-8s;%s' % (record, self.__domain, value, record_type, ttl))
+                
+    def add(self, record, value, record_type, ttl):
+        '''Add record'''
+        if not record:
+            record = '@'
+        if self.__is_exist(record):
+            if not value:
+                if self.__records[record][0] == 'A':
+                    value = self.__get_ip()
+                else:
+                    value = self.__records[record][0] 
+            if not record_type:
+                record_type = self.__records[record][1]    
+            if not ttl:
+                ttl = self.__records[record][2]
+            else:
+                ttl = int(ttl)
+                
+            if self.__records[record][0] != value:
+                self.__update_record(self.__records[record][3], record, value, record_type, ttl)
+            elif self.__records[record][1] != record_type:
+                self.__update_record(self.__records[record][3], record, value, record_type, ttl)
+            elif self.__records[record][2] != ttl:
+                self.__update_record(self.__records[record][3], record, value, record_type, ttl)
+            else:
+                pass
+        else:
+            if not value:
+                value = self.__get_ip()
+            if not record_type:
+                record_type = 'A'
+            if not ttl:
+                ttl = 600
+            self.__add_record(record, value, record_type, ttl)
+        self.list()
+        
+    def __remove_record(self, record_id):
+        '''Remove record'''
+        req = DeleteDomainRecordRequest()
+        req.set_RecordId(record_id)
+        js = json.loads(self.__bs.do_action_with_exception(req).decode())
+            
+    def remove(self, record):
+        '''Remove record'''
+        if self.__is_exist(record):
+            self.__remove_record(self.__records[record][3])
+        else:
+            print('[-]Record: {} is not existence.'.format(record))
+        self.list()
+    
 def main():
-    parser = ArgumentParser()
-
-    parser.add_argument('AccessKeyId')
-    parser.add_argument('AccessKeySecret')
-    parser.add_argument('Domain')
-    parser.add_argument('--add', metavar='<rr>')
-    parser.add_argument('--delete', metavar='<rr>')
-    parser.add_argument('--value', metavar='<value>')
-    parser.add_argument('--type', metavar='<type>', default='A')
-    parser.add_argument('--ttl', metavar='<ttl time>', default=600, type=int)
-    parser.add_argument('--verbose', action='store_false')
-        
-    args = parser.parse_args()
-
+    '''Parse arguments with docopt.'''
+    args = docopt(__doc__)
     #print(args)
-    
-    R.verbose = args.verbose
-    
-    bs = client.AcsClient(args.AccessKeyId, args.AccessKeySecret,\
-            'cn-hangzhou')
-    
-    records = query_record(bs, args.Domain)
-    
-    #add
-    if args.add:
-        if not args.value:
-            args.value = get_def_inet()
-        flag = is_exist(records, args.add)
-        if flag:
-            return update_record(bs, args.Domain, records[args.add][3],\
-                args.value, args.add, args.type, args.ttl)
+    if args['config'] == True:
+        with open(get_home_file(), 'w') as f:
+            f.write('{} {} {}'.format(args['<key>'], args['<key-secret>'], args['<domain>']))
+        Alidns(args['<key>'], args['<key-secret>'], args['<domain>']).list()            
+    elif args['clean'] == True:
+        os.remove(get_home_file())
+    else:
+        if os.path.exists(get_home_file()):
+            key = ''
+            key_secret = ''
+            domain = ''
+            with open(get_home_file(),'r') as f:
+                s = f.read().split()
+                key = s[0]
+                key_secret = s[1]
+                domain = s[2]
+            ali = Alidns(key, key_secret, domain)
+            if args['list'] == True:
+                ali.list()
+            elif args['add'] == True:
+                ali.add(args['-r'], args['-v'], args['-t'], args['--ttl'])
+            elif args['remove'] == True:
+                ali.remove(args['<record>'])
+            else:
+                print(__doc__)
         else:
-            return add_record(bs, args.Domain,\
-                args.value, args.add, args.type, args.ttl)
-    #delete
-    if args.delete:
-        flag = is_exist(records, args.delete)
-        if flag:
-            delete_record(bs, args.Domain, records[args.delete][3])
-        else:
-            parser.error('Recode: %s not exist!' % args.delete)
-#delete
-def delete_record(bs, domain, record_id):
-    req = DeleteDomainRecordRequest()
-    req.set_RecordId(record_id)
-    
-    try:
-        js = json.loads(bs.do_action_with_exception(req).decode())
-        #myprint('[*]delete record return:\n%s' % js)
-    except Exception as e:
-        myprint('[-]%s' % e)
-    
-def update_record(bs, domain, record_id, value, rr, rtype, ttl):
-    req = UpdateDomainRecordRequest()
-    req.set_RecordId(record_id)
-    req.set_accept_format('json')
-    req.set_RR(rr)
-    req.set_Type(rtype)
-    req.set_TTL(ttl)
-    req.set_Value(value)
-    
-    try:
-        js = json.loads(bs.do_action_with_exception(req).decode())
-        #myprint('[*]update record return:\n%s' % js)
-        myprint('[+]%s.%s -> %s;%s;%d' % (rr, domain, value, rtype, ttl))
-    except Exception as e:
-        myprint('[-]%s' % e)
-  
-def add_record(bs, domain, value, rr, rtype, ttl):
-    req = AddDomainRecordRequest()
-    req.set_DomainName(domain) 
-    req.set_accept_format('json')
-    req.set_RR(rr)
-    req.set_Type(rtype)
-    req.set_TTL(ttl)
-    req.set_Value(value)
-    
-    try:
-        js = json.loads(bs.do_action_with_exception(req).decode())
-        #myprint('[*]add record return:\n%s' % js)
-        myprint('[*]%8s.%s -> %-16s;  %-8s;%d' % (rr, domain, value, rtype, ttl))
-    except Exception as e:
-        myprint('[-]%s' % e)
-    
-#query record return a dictionary
-def query_record(bs, domain):
-    req = DescribeDomainRecordsRequest()
-    req.set_accept_format('json')
-    req.set_DomainName(domain)
-    js = json.loads(bs.do_action_with_exception(req).decode())
-    #myprint('[*]query record return:\n%s' % js)
-    ret = {}
-    for x in js['DomainRecords']['Record']:
-        RR = x['RR']
-        Type = x['Type']
-        Value = x['Value']
-        RecordId = x['RecordId']
-        TTL = x['TTL']
-        myprint('[*]%8s.%s -> %-16s;  %-8s;%d' % (RR, domain, Value, Type, TTL))
-        ret[RR] = [Value, Type, TTL, RecordId]
-    return ret
-
-def myprint(msg):
-    if R.verbose:
-        print(msg)
+            print('[-]Need config,use [alidns config] command.')
         
-def is_exist(records, rr):
-    for i in records:
-        if rr == i:
-            return True
-    return False
-
-def get_def_inet():
-    s = socket.socket()
-    s.connect(('www.baidu.com',80))
-    r = s.getsockname()[0]
-    s.close()
-    return r
-
+def get_home_file():
+    """Get home file path."""
+    parent = None
+    if os.name == 'nt':
+        parent = os.environ['USERPROFILE'] + '\\alidns\\'
+    else:
+        parent = os.environ['HOME'] + '/alidns/'
+    if not os.path.isdir(parent):
+        os.mkdir(parent)
+    return parent + 'alidns'
+        
 if __name__=='__main__':
     main()

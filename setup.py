@@ -15,18 +15,19 @@ packages = [
 
 setup(
     name='alidns',
-    version='1.0.5',
+    version='2.0.0',
     keywords=(
         'alidns',
         'aliyun',
-        'ddns'
+        'ddns',
+        'dns'
     ),
     author='luoyeah',
     author_email='luoyeah_ilku@foxmail.com',
     url=home_page,
     license='GPLv3',
-    description='Aliyun-DNS update tool.',
-    long_description='HomePage: %s' % home_page,
+    description='Aliyun DNS Update Tool.',
+    long_description='Detail: %s' % home_page,
     include_package_data=True,
     zip_safe=False,
     packages=packages,
