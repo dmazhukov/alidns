@@ -192,7 +192,7 @@ def get_home_file():
     if os.name == 'nt':
         parent = os.environ['USERPROFILE'] + '\\alidns\\'
     else:
-        parent = os.environ['HOME'] + '/alidns/'
+        parent = os.environ['HOME'] + '/.alidns/'
     if not os.path.isdir(parent):
         os.mkdir(parent)
     return parent + 'alidns'
