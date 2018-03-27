@@ -33,4 +33,6 @@ Examples:
 ```
 ### Changes : 
 #### v2.0.0
-* use docopt module
+* use docopt module.
+#### v2.0.1
+* fix update error.

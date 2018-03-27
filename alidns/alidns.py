@@ -111,7 +111,7 @@ class Alidns(object):
             record = '@'
         if self.__is_exist(record):
             if not value:
-                if self.__records[record][0] == 'A':
+                if self.__records[record][1] == 'A':
                     value = self.__get_ip()
                 else:
                     value = self.__records[record][0] 
